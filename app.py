@@ -1,57 +1,40 @@
-import streamlit as st
-import json
-from utils.summary import summarize_with_ratio
+import math
+import openai
+import os
 
-st.set_page_config(page_title="🗞️ Résumeur JSON Français", layout="centered")
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-st.title("🗞️ Résumeur JSON avec GPT-4 Turbo (sortie en français)")
+MIN_WORDS = 30  # To ensure readability even at low % summaries
 
-uploaded_file = st.file_uploader("📂 Chargez un fichier JSON", type=["json"])
+def count_words(text):
+    return len(text.strip().split())
 
-summary_percent = st.slider(
-    "Choisissez la longueur du résumé (en pourcentage du texte original)",
-    min_value=10,
-    max_value=90,
-    value=20,
-    step=10
-)
+def call_gpt_summary(text, target_word_count):
+    # Ensure target word count isn't lower than the readability threshold
+    target = max(target_word_count, MIN_WORDS)
 
-if uploaded_file:
-    raw_data = uploaded_file.read()
-    try:
-        data = json.loads(raw_data)
-    except json.JSONDecodeError:
-        st.error("❌ Fichier JSON invalide.")
-        st.stop()
-
-    output_data = []
-
-    with st.spinner("📚 Génération des résumés en cours…"):
-        for entry in data:
-            original_input = entry.get("input", "")
-            original_transition = entry.get("output", "")
-            summaries = summarize_with_ratio(original_input, summary_percent)
-
-            summarized_input = "\n".join([s["text"] for s in summaries])
-
-            output_data.append({
-                "input": summarized_input,
-                "transition": original_transition
-            })
-
-    st.success(f"✅ {len(output_data)} entrées traitées.")
-
-    # Show preview
-    for i, item in enumerate(output_data[:3]):
-        st.subheader(f"Entrée {i+1}")
-        st.text_area("Résumé généré", item["input"], height=150)
-        st.markdown(f"**Transition :** _{item['transition']}_")
-
-    # Download button
-    summarized_json = json.dumps(output_data, ensure_ascii=False, indent=2)
-    st.download_button(
-        label="📥 Télécharger le JSON Résumé",
-        data=summarized_json,
-        file_name="resume_francais.json",
-        mime="application/json"
+    prompt = (
+        f"Tu es un assistant de presse. Résume très fidèlement le texte suivant en français en maximum {target} mots. "
+        f"N'ajoute aucune interprétation. Sois synthétique, clair et factuel. Aucune introduction ou conclusion, seulement le résumé.\n\n"
+        f"Texte à résumer :\n{text}\n\n"
+        f"Résumé (maximum {target} mots) :"
     )
+
+    response = client.chat.completions.create(
+        model="gpt-4-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    return response.choices[0].message.content.strip()
+
+def summarize_section(section_text, ratio):
+    word_count = count_words(section_text)
+    target_word_count = math.ceil(word_count * ratio)
+    summary_text = call_gpt_summary(section_text, target_word_count)
+    return {"text": summary_text}
+
+def summarize_with_ratio(input_text, summary_percent):
+    sections = input_text.split("\n")
+    ratio = summary_percent / 100.0
+    return [summarize_section(section, ratio) for section in sections if section.strip()]
