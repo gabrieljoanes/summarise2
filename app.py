@@ -1,60 +1,57 @@
 import streamlit as st
 import json
-from utils.summary import summarize_with_ratio, MIN_NEWS_WORDS
+from utils.summary import summarize_with_ratio
 
-st.set_page_config(page_title="🗞️ Smart News Summariser", layout="wide")
-st.title("🗞️ JSON Input Summariser with Smart Length Adjustment")
+st.set_page_config(page_title="🗞️ Résumeur JSON Français", layout="centered")
 
-uploaded_file = st.file_uploader("Upload a JSON file", type="json")
+st.title("🗞️ Résumeur JSON avec GPT-4 Turbo (sortie en français)")
+
+uploaded_file = st.file_uploader("📂 Chargez un fichier JSON", type=["json"])
 
 summary_percent = st.slider(
-    "Select summary output length (as a percentage of original word count)",
-    min_value=10, max_value=90, value=20, step=5
-) / 100  # Convert to float
+    "Choisissez la longueur du résumé (en pourcentage du texte original)",
+    min_value=10,
+    max_value=90,
+    value=20,
+    step=10
+)
 
 if uploaded_file:
-    raw_data = json.load(uploaded_file)
-    summarized_data = []
+    raw_data = uploaded_file.read()
+    try:
+        data = json.loads(raw_data)
+    except json.JSONDecodeError:
+        st.error("❌ Fichier JSON invalide.")
+        st.stop()
 
-    st.info(
-        f"Each section will be summarized to {int(summary_percent * 100)}% of the original word count, "
-        f"but will always be at least {MIN_NEWS_WORDS} words and checked for readability."
-    )
+    output_data = []
 
-    for entry in raw_data:
-        original_input = entry.get("input", "")
-        transition_output = entry.get("output", "")
-        summaries = summarize_with_ratio(original_input, summary_percent)
+    with st.spinner("📚 Génération des résumés en cours…"):
+        for entry in data:
+            original_input = entry.get("input", "")
+            original_transition = entry.get("output", "")
+            summaries = summarize_with_ratio(original_input, summary_percent)
 
-        summarized_data.append({
-            "input": original_input,
-            "summaries": summaries,
-            "original_output": transition_output
-        })
+            summarized_input = "\n".join([s["text"] for s in summaries])
 
-    st.success(f"Processed {len(summarized_data)} entries.")
+            output_data.append({
+                "input": summarized_input,
+                "transition": original_transition
+            })
 
-    for i, item in enumerate(summarized_data, 1):
-        st.markdown(f"---\n### Entry {i}")
-        st.markdown("#### Original Input")
-        st.text(item['input'])
+    st.success(f"✅ {len(output_data)} entrées traitées.")
 
-        st.markdown("#### Summarized Sections")
-        for idx, section in enumerate(item['summaries'], 1):
-            used = section['used_words']
-            source = "ratio" if section['used_words_source'] == "ratio" else f"minimum enforced ({MIN_NEWS_WORDS}+)"
-            retry_info = "✅ Clean" if not section['retried'] else "🔁 Retried for readability"
-            st.markdown(f"**Section {idx}** — *{used} words used ({source}) — {retry_info}*")
-            st.write(section['text'])
+    # Show preview
+    for i, item in enumerate(output_data[:3]):
+        st.subheader(f"Entrée {i+1}")
+        st.text_area("Résumé généré", item["input"], height=150)
+        st.markdown(f"**Transition :** _{item['transition']}_")
 
-        st.markdown("#### Original Transition Output")
-        st.text(item['original_output'])
-
-    # Fixed: Now string instead of StringIO
-    output_json = json.dumps(summarized_data, ensure_ascii=False, indent=2)
+    # Download button
+    summarized_json = json.dumps(output_data, ensure_ascii=False, indent=2)
     st.download_button(
-        label="📥 Download Summarized JSON",
-        data=output_json,
-        file_name="summarized_output.json",
+        label="📥 Télécharger le JSON Résumé",
+        data=summarized_json,
+        file_name="resume_francais.json",
         mime="application/json"
     )
