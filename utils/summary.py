@@ -1,10 +1,9 @@
 import math
 import re
-import openai
 import streamlit as st
 from openai import OpenAI
 
-# Load OpenAI API key from Streamlit secrets or env
+# Load OpenAI client using Streamlit secrets
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 MIN_NEWS_WORDS = 30
@@ -14,7 +13,7 @@ def split_text_by_newline(text: str) -> list[str]:
     return [part.strip() for part in text.split('\n') if part.strip()]
 
 def is_summary_incomplete(text: str) -> bool:
-    """Heuristic to detect an incomplete or bad summary."""
+    """Detect if the summary might be cut off or unusable."""
     if len(text.split()) < 8:
         return True
     if not re.search(r'[.!?]$', text.strip()):
@@ -23,14 +22,16 @@ def is_summary_incomplete(text: str) -> bool:
 
 def call_gpt_summary(section: str, word_limit: int) -> str:
     prompt = (
-        f"Please summarize the following news paragraph in no more than {word_limit} words. "
-        f"The summary should remain readable and convey the essential information.\n\n"
-        f"Text:\n{section}"
+        f"Tu es journaliste pour un site d'actualités régionales.\n"
+        f"Résume le texte ci-dessous en français, en **maximum {word_limit} mots**. "
+        f"Ton résumé doit être fluide, lisible, naturel et refléter toutes les informations importantes. "
+        f"Rédige comme un article de presse professionnel — sans phrases incomplètes, sans puces, sans style télégraphique.\n\n"
+        f"Texte à résumer :\n{section}"
     )
     response = client.chat.completions.create(
         model="gpt-4-turbo",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.5
+        temperature=0.4
     )
     return response.choices[0].message.content.strip()
 
