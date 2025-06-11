@@ -1,9 +1,8 @@
 import streamlit as st
 import json
-import io
 from utils.summary import summarize_with_ratio, MIN_NEWS_WORDS
 
-st.set_page_config(page_title="Adjustable News Summariser", layout="wide")
+st.set_page_config(page_title="🗞️ Smart News Summariser", layout="wide")
 st.title("🗞️ JSON Input Summariser with Smart Length Adjustment")
 
 uploaded_file = st.file_uploader("Upload a JSON file", type="json")
@@ -19,7 +18,7 @@ if uploaded_file:
 
     st.info(
         f"Each section will be summarized to {int(summary_percent * 100)}% of the original word count, "
-        f"but will always be at least {MIN_NEWS_WORDS} words to maintain readability."
+        f"but will always be at least {MIN_NEWS_WORDS} words and checked for readability."
     )
 
     for entry in raw_data:
@@ -43,18 +42,19 @@ if uploaded_file:
         st.markdown("#### Summarized Sections")
         for idx, section in enumerate(item['summaries'], 1):
             used = section['used_words']
-            source = "ratio" if section['used_words_source'] == "ratio" else f"minimum enforced ({MIN_NEWS_WORDS} words)"
-            st.markdown(f"**Section {idx}** — *{used} words used ({source})*")
+            source = "ratio" if section['used_words_source'] == "ratio" else f"minimum enforced ({MIN_NEWS_WORDS}+)"
+            retry_info = "✅ Clean" if not section['retried'] else "🔁 Retried for readability"
+            st.markdown(f"**Section {idx}** — *{used} words used ({source}) — {retry_info}*")
             st.write(section['text'])
 
         st.markdown("#### Original Transition Output")
         st.text(item['original_output'])
 
-    # Downloadable JSON
+    # Fixed: Now string instead of StringIO
     output_json = json.dumps(summarized_data, ensure_ascii=False, indent=2)
     st.download_button(
         label="📥 Download Summarized JSON",
-        data=io.StringIO(output_json),
+        data=output_json,
         file_name="summarized_output.json",
         mime="application/json"
     )
