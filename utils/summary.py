@@ -1,10 +1,11 @@
 import math
 import re
 import openai
-import os
+import streamlit as st
+from openai import OpenAI
 
-# Load API key from environment or Streamlit secrets
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Load OpenAI API key from Streamlit secrets or env
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 MIN_NEWS_WORDS = 30
 RETRY_INCREMENT = 20
@@ -13,6 +14,7 @@ def split_text_by_newline(text: str) -> list[str]:
     return [part.strip() for part in text.split('\n') if part.strip()]
 
 def is_summary_incomplete(text: str) -> bool:
+    """Heuristic to detect an incomplete or bad summary."""
     if len(text.split()) < 8:
         return True
     if not re.search(r'[.!?]$', text.strip()):
@@ -25,7 +27,7 @@ def call_gpt_summary(section: str, word_limit: int) -> str:
         f"The summary should remain readable and convey the essential information.\n\n"
         f"Text:\n{section}"
     )
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4-turbo",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5
